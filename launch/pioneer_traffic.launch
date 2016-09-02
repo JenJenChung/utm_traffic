@@ -1,0 +1,5 @@
+<launch>
+  <rosparam file="$(find utm_agent)/utm_agent_params.yaml" command="load"/>
+  <rosparam file="$(find utm_traffic)/map/map.yaml" command="load"/>
+  <node pkg="utm_traffic" type="pioneer_traffic" respawn="false" name="pioneer_traffic" output="screen"/>
+</launch>

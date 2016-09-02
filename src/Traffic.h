@@ -1,0 +1,329 @@
+#include <ros/ros.h>
+#include <float.h>
+#include <algorithm>
+#include <iostream>
+#include "std_msgs/Bool.h"
+#include "geometry_msgs/Twist.h"
+#include "nav_msgs/Odometry.h"
+#include "agent_msgs/AgentMembership.h" // custom message for reporting parent (current) and child (next) agents
+#include "agent_msgs/UtmGraph.h" // custom message for reporting link traversal costs over entire graph
+#include "agent_msgs/BoolLog.h" // custom message including header and bool type
+#include "map_msgs/OccupancyGridUpdate.h"
+#include "Voronoi.h"
+
+class Traffic
+{
+  public:
+    Traffic(ros::NodeHandle) ;
+    ~Traffic(){}
+    
+  private:
+    // pub/sub nodes
+    ros::Subscriber subAgentGraph ;
+    ros::Subscriber subOdom ;
+    ros::Subscriber subCmdVel ;
+    ros::Subscriber subGoal ;
+    ros::Publisher pubMembership ;
+    ros::Publisher pubCmdVel ;
+    ros::Publisher pubDelay ;
+    ros::Publisher pubCostMapUpdate ;
+    ros::Publisher pubMapGoal ;
+    
+    agent_msgs::AgentMembership membership ;
+    agent_msgs::UtmGraph graph ;
+    int numAgents ;
+    int numVertices ;
+    
+    // link agents defined as source/sink voronoi pairs; source voronoi also defines current voronoi parition
+    // note that agents[membership.parent][1] == agents[membership.child][0],
+    // i.e. sink of parent link = source of child link
+    vector< vector<int> > agents ;
+    
+    Voronoi cellMap ; // handles Voronoi partition membership operations
+    int curV ; // current Voronoi parition, must equal agents[membership.parent][0] (initialised to -1)
+    int goalV ; // Voronoi partition containing goal state
+    vector<int> linkPath ; // list of link agents to goal
+    
+    bool graphLog ; // New graph message has been received since last Voronoi transit?
+    bool cmdLog ; // First cmd_vel message has been received from move_base?
+    bool goalLog ; // First map_goal message has been received?
+    
+    agent_msgs::BoolLog delayed ; // header+boolean defining if traffic is currently waiting to enter link
+    geometry_msgs::Twist cmd ; // last received cmd_vel message from move_base, typically is rebroadcast directly, will be overwritten if traffic is delayed
+    geometry_msgs::Twist goal ;
+    
+    // Callback functions
+    void graphCallback(const agent_msgs::UtmGraph&) ;
+    void odomCallback(const nav_msgs::Odometry&) ;
+    void cmdVelCallback(const geometry_msgs::Twist&) ;
+    void goalCallback(const geometry_msgs::Twist&) ;
+    
+    void ComputeHighPath(int, int) ; // Compute sequence of links to traverse
+    void AdjustPath(bool &) ; // Replanning routine, output determines if new membership differs from old membership
+    void UpdateCostMapLayer() ; // Updates virtual walls in custom move_base costmap layer according to linkPath
+    static bool ComparePQueue(vector<double>, vector<double>) ;
+} ;
+
+Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), cellMap("../map/voronoi_05_cell.csv"){
+  // Initialise pub/sub nodes
+  subAgentGraph = nh.subscribe("utm_graph", 10, &Traffic::graphCallback, this) ;
+  subOdom = nh.subscribe("odom", 10, &Traffic::odomCallback, this) ;
+  subCmdVel = nh.subscribe("pioneer/move_base/cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
+  subGoal = nh.subscribe("received_map_goal", 10, &Traffic::goalCallback, this) ;
+  pubMembership = nh.advertise<agent_msgs::AgentMembership>("membership", 10, true) ;
+  pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
+  pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
+  pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
+  pubCostMapUpdate = nh.advertise<map_msgs::OccupancyGridUpdate>("move_base/agent_costmap_updates", 10) ; // TODO: update to relevant layer
+  
+  // Read in UTM parameters
+  ros::param::get("utm_agent/num_agents", numAgents);
+  ros::param::get("utm_agent/num_vertices", numVertices);
+  
+  char buffer[50] ;
+  for (int i = 0; i < numAgents; i++){
+    vector<int> temp(2,0) ;
+    sprintf(buffer, "utm_agent/agent%u/v0", i) ;
+    ros::param::get(buffer, temp[0]);
+    sprintf(buffer, "utm_agent/agent%u/v1", i) ;
+    ros::param::get(buffer, temp[1]);
+    agents.push_back(temp) ;
+  }
+  
+  // Initialise log delay boolean
+  delayed.data = false ;
+}
+
+void Traffic::graphCallback(const agent_msgs::UtmGraph& msg){
+  graph.actual_traversal_costs = msg.actual_traversal_costs ;
+  graph.policy_output_costs = msg.policy_output_costs ;
+  graph.wait_to_enter = msg.wait_to_enter ;
+  graphLog = true ;
+}
+
+void Traffic::odomCallback(const nav_msgs::Odometry& msg){
+  double x = msg.pose.pose.position.x ;
+  double y = msg.pose.pose.position.y ;
+  
+  delayed.header = msg.header ; // copy over header from odometry
+  delayed.data = false ;
+  
+  // Compute current membership
+  curV = cellMap.Membership(x,y) ;
+  
+  // Plan from current position if new goal was received
+  if (goalLog){
+    ComputeHighPath(curV,goalV) ; // this will update linkPath
+    if (linkPath.size() > 0)
+      membership.parent = linkPath[0] ;
+    else
+      membership.parent = -1 ; // this should never be triggered here, i.e. no consecutive goals should be in same voronoi
+    if (linkPath.size() > 1)
+      membership.child = linkPath[1] ;
+    else
+      membership.child = -1 ;
+    
+    pubMembership.publish(membership) ; // announce membership change
+  }
+  
+  // Determine if Voronoi transit occurred
+  if (curV == agents[membership.parent][1]){
+    // Update memberships
+    linkPath.erase(linkPath.begin()) ; // remove top link from path 
+    if (linkPath.size() > 0)
+      membership.parent = linkPath[0] ;
+    else
+      membership.parent = -1 ; // in final voronoi, curV == goalV
+    
+    if (linkPath.size() > 1)
+      membership.child = linkPath[1] ;
+    else
+      membership.child = -1 ; // on final link
+    
+    // Allow replanning from parent node sink voronoi if new graph was received during last transit
+    if (graphLog && membership.child >= 0){
+      bool diff ;
+      AdjustPath(diff) ;
+    }
+    pubMembership.publish(membership) ; // announce membership change
+  }
+  else { // No voronoi transition detected, determine if currently adjacent to next voronoi
+    bool adj = cellMap.MovingToNextVoronoi(x,y,agents[membership.parent][1]) ;
+    if (adj && graph.wait_to_enter[membership.child]){
+      // Adjacent to next Voronoi, must wait to enter
+      delayed.data = true ;
+      
+      // Stop platform
+      cmd.linear.x = 0.0 ;
+      cmd.linear.y = 0.0 ;
+      cmd.linear.z = 0.0 ;
+      cmd.angular.x = 0.0 ;
+      cmd.angular.y = 0.0 ;
+      cmd.angular.z = 0.0 ;
+      
+      // Allow replanning from parent node sink voronoi if new graph was received since last planning time
+      if (graphLog){
+        bool diff ;
+        AdjustPath(diff) ;
+        if (diff)
+          pubMembership.publish(membership) ;
+      }
+    }
+  }
+  
+  if (goalLog){
+    // Publish goal to move_base once processed
+    pubMapGoal.publish(goal) ;
+    goalLog = false ; // current goal has been processed
+  }
+  pubDelay.publish(delayed) ; // published for rosbag logging
+  pubCmdVel.publish(cmd) ;
+}
+
+void Traffic::cmdVelCallback(const geometry_msgs::Twist& msg){
+  cmd.linear.x = msg.linear.x ;
+  cmd.linear.y = msg.linear.y ;
+  cmd.linear.z = msg.linear.z ;
+  cmd.angular.x = msg.angular.x ;
+  cmd.angular.y = msg.angular.y ;
+  cmd.angular.z = msg.angular.z ;
+  cmdLog = true ;
+}
+
+void Traffic::goalCallback(const geometry_msgs::Twist& msg){
+  goal.linear.x = msg.linear.x ;
+  goal.linear.y = msg.linear.y ;
+  goal.linear.z = msg.linear.z ;
+  goal.angular.x = msg.angular.x ;
+  goal.angular.y = msg.angular.y ;
+  goal.angular.z = msg.angular.z ;
+  goalLog = true ;
+  
+  goalV = cellMap.Membership(goal.linear.x,goal.linear.y) ;
+}
+
+void Traffic::ComputeHighPath(int s, int g){
+  // Using Dijkstra's, only store best parent vertex ID
+  vector<int> closed(numVertices,-1) ;
+  
+  vector< vector<double> > pQueue ;
+  for (size_t i = 0; i < numVertices; i++){
+    vector<double> e ;
+    e.push_back((double)i) ; // vertex ID
+    e.push_back(-1.0) ; // best parent vertex ID
+    e.push_back(DBL_MAX) ; // cost to arrive
+    pQueue.push_back(e) ;
+  }
+  
+  pQueue[s][2] = 0.0 ; // set cost to arrive for start vertex
+  bool gReached = false ;
+  while (!gReached && !pQueue.empty()){
+    std::sort(pQueue.begin(),pQueue.end(),ComparePQueue) ;
+    
+    // Pop the first element
+    vector<double> v = pQueue[0] ;
+    pQueue.erase(pQueue.begin()) ;
+    
+    // Log best parent into closed set
+    closed[(int)v[0]] = (int)v[1] ;
+    
+    // Check if goal is reached
+    if ((int)v[0] == g){
+      gReached = true ;
+      break ;
+    }
+    
+    // Find all children
+    vector<int> c ;
+    vector<double> d ;
+    for (size_t i = 0; i < agents.size(); i++){
+      if (agents[i][0] == (int)v[0]){
+        c.push_back(agents[i][1]) ;
+        // compute cost to arrive from v
+        double c2a = v[2] + graph.actual_traversal_costs[i] + graph.policy_output_costs[i] ;
+        d.push_back(c2a) ;
+      }
+    }
+    
+    // Update pQueue cost to arrive for all children
+    for (size_t i = 0; i < c.size(); i++){
+      for (size_t j = 0; j < pQueue.size(); j++){
+        if ((int)pQueue[j][0] == c[i]){
+          if (pQueue[j][2] > d[i]){
+            pQueue[j][1] = v[0] ; // change best parent
+            pQueue[j][2] = d[1] ; // change cost to arrive
+          }
+          break ;
+        }
+      }
+    }
+  }
+  
+  if (!gReached)
+    std::cout << "Error [Traffic::ComputeHighpath()]: no path found!\n" ;
+  else {
+    int v = g ;
+    vector<int> rPath ; // path from goal to source
+    while (v != s){
+      int p = closed[v] ;
+      int ind ;
+      for (size_t i = 0; i < agents.size(); i++)
+        if (agents[i][0] == p && agents[i][1] == v)
+          ind = i ;
+      rPath.push_back(ind) ;
+      v = p ;
+    }
+    linkPath.clear() ;
+    for (size_t i = rPath.size()-1; i >= 0; i--)
+      linkPath.push_back(rPath[i]) ;
+  }
+}
+
+void Traffic::AdjustPath(bool & diff){
+  vector<int> oldPath = linkPath ;
+  ComputeHighPath(agents[membership.parent][1],goalV) ; // this will update linkPath
+  
+  // Determine if new path is different to old path, note that new linkPath does not contain parent link
+  diff = false ;
+  for (size_t i = 0; i < linkPath.size(); i++){
+    if (linkPath[i] != oldPath[i+1]){
+      diff = true ;
+      break ;
+    }
+  }
+  
+  // Adjust values if new path is different
+  if (diff){
+    // Replace parent in link path since transition still pending
+    vector<int> temp = linkPath ;
+    linkPath.clear() ;
+    linkPath.push_back(membership.parent) ;
+    for (size_t i = 0; i < temp.size(); i++)
+      linkPath.push_back(temp[i]) ;
+    
+    if (linkPath.size() > 1){
+      if (membership.child == linkPath[1])
+        diff = false ; // no need to publish membership message since no change
+      else
+        membership.child = linkPath[1] ;
+    }
+    else
+      membership.child = -1 ; // on final link, this should never be triggered here
+    
+    UpdateCostMapLayer() ;
+  }
+  else { // retain old path if no change detected
+    linkPath.clear() ;
+    linkPath = oldPath ;
+  }
+  graphLog = false ; // latest graph has been accounted for
+}
+
+void Traffic::UpdateCostMapLayer(){
+  map_msgs::OccupancyGridUpdate update ;
+  pubCostMapUpdate.publish(update) ;
+}
+
+bool Traffic::ComparePQueue(vector<double> A, vector<double> B){
+  return (A[2] < B[2]) ;
+}
