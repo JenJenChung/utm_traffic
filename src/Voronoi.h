@@ -16,7 +16,7 @@ using std::getline ;
 class Voronoi
 {
   public:
-    Voronoi(const char *) ;
+    Voronoi() ;
     ~Voronoi(){}
     
     int Membership(double, double) ; // output voronoi index
@@ -32,29 +32,25 @@ class Voronoi
     void WorldToCells(double, double, int&, int&) ; // convert odometry position to cell index
 } ;
 
-Voronoi::Voronoi(const char * filename){
+Voronoi::Voronoi(){
   // Read in parameters
-  ros::param::get("rows", numRows);
-  ros::param::get("columns", numCols);
-  ros::param::get("cell_offset/x", rOffset);
-  ros::param::get("cell_offset/y", cOffset);
-  ros::param::get("resolution", res);
+  ros::param::get("voronoi_map/rows", numRows);
+  ros::param::get("voronoi_map/columns", numCols);
+  ros::param::get("voronoi_map/cell_offset/x", rOffset);
+  ros::param::get("voronoi_map/cell_offset/y", cOffset);
+  ros::param::get("voronoi_map/resolution", res);
 
-  // Read in voronoi map  
-  ifstream mapFile(filename) ;
+  // Read in voronoi map
+  char buffer[50] ;
+  for (int i = 0; i < numRows; i++){
+    vector<int> v ;
+    sprintf(buffer,"voronoi_map/row%d",i) ;
+    ros::param::get(buffer,v) ;
+    cells.push_back(v) ;
+  }
 
-	ROS_INFO("Reading map from file...") ;
-	vector<int> v(numCols) ;
-	string line ;
-	while (getline(mapFile,line)){
-		stringstream lineStream(line) ;
-		string cell ;
-		int i = 0 ;
-		while (getline(lineStream,cell,','))
-			v[i++] = atoi(cell.c_str()) ;
-		cells.push_back(v) ;
-	}
-	ROS_INFO("Voronoi map upload complete!") ;
+	ROS_INFO_STREAM("Voronoi map upload complete! " << numRows << " x " << numCols << " map at " << res << "m/cell") ;
+	ROS_INFO_STREAM("Test cells.size(): " << cells.size() << ", cells[0][0]: " << cells[0][0]) ;
 }
 
 int Voronoi::Membership(double x, double y){

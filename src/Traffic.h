@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <ros/console.h>
 #include <float.h>
 #include <algorithm>
 #include <iostream>
@@ -44,9 +45,11 @@ class Traffic
     int goalV ; // Voronoi partition containing goal state
     vector<int> linkPath ; // list of link agents to goal
     
+    bool firstGraph ; // First graph message has been received?
     bool graphLog ; // New graph message has been received since last Voronoi transit?
     bool cmdLog ; // First cmd_vel message has been received from move_base?
-    bool goalLog ; // First map_goal message has been received?
+    bool goalLog ; // New map_goal message has been received?
+    bool membershipAssigned ; // First membership assigned since receiving new goal?
     
     agent_msgs::BoolLog delayed ; // header+boolean defining if traffic is currently waiting to enter link
     geometry_msgs::Twist cmd ; // last received cmd_vel message from move_base, typically is rebroadcast directly, will be overwritten if traffic is delayed
@@ -64,12 +67,12 @@ class Traffic
     static bool ComparePQueue(vector<double>, vector<double>) ;
 } ;
 
-Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), cellMap("../map/voronoi_05_cell.csv"){
+Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), firstGraph(false), membershipAssigned(false), goalLog(false){
   // Initialise pub/sub nodes
   subAgentGraph = nh.subscribe("utm_graph", 10, &Traffic::graphCallback, this) ;
   subOdom = nh.subscribe("odom", 10, &Traffic::odomCallback, this) ;
-  subCmdVel = nh.subscribe("pioneer/move_base/cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
-  subGoal = nh.subscribe("received_map_goal", 10, &Traffic::goalCallback, this) ;
+  subCmdVel = nh.subscribe("recovery_cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
+  subGoal = nh.subscribe("cmd_map_goal", 10, &Traffic::goalCallback, this) ;
   pubMembership = nh.advertise<agent_msgs::AgentMembership>("membership", 10, true) ;
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
@@ -92,27 +95,36 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   
   // Initialise log delay boolean
   delayed.data = false ;
+  
+  ROS_INFO("***** Traffic initialisation complete! *****") ;
 }
 
 void Traffic::graphCallback(const agent_msgs::UtmGraph& msg){
+  ROS_INFO("***** Graph callback *****") ;
   graph.actual_traversal_costs = msg.actual_traversal_costs ;
   graph.policy_output_costs = msg.policy_output_costs ;
   graph.wait_to_enter = msg.wait_to_enter ;
   graphLog = true ;
+  if (!firstGraph)
+    firstGraph = true ;
 }
 
 void Traffic::odomCallback(const nav_msgs::Odometry& msg){
+//  ROS_INFO("***** Odom callback *****") ;
   double x = msg.pose.pose.position.x ;
   double y = msg.pose.pose.position.y ;
   
   delayed.header = msg.header ; // copy over header from odometry
+  bool delay = delayed.data ;
   delayed.data = false ;
   
   // Compute current membership
   curV = cellMap.Membership(x,y) ;
+//  ROS_INFO_STREAM("Current position: (" << x << "," << y << "), Voronoi: " << curV ) ;
   
-  // Plan from current position if new goal was received
-  if (goalLog){
+  // Plan from current position if new goal was received and graph was received
+  if (goalLog && firstGraph){
+    ROS_INFO("New goal was received...") ;
     ComputeHighPath(curV,goalV) ; // this will update linkPath
     if (linkPath.size() > 0)
       membership.parent = linkPath[0] ;
@@ -124,63 +136,74 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
       membership.child = -1 ;
     
     pubMembership.publish(membership) ; // announce membership change
+    membershipAssigned = true ;
   }
   
-  // Determine if Voronoi transit occurred
-  if (curV == agents[membership.parent][1]){
-    // Update memberships
-    linkPath.erase(linkPath.begin()) ; // remove top link from path 
-    if (linkPath.size() > 0)
-      membership.parent = linkPath[0] ;
-    else
-      membership.parent = -1 ; // in final voronoi, curV == goalV
-    
-    if (linkPath.size() > 1)
-      membership.child = linkPath[1] ;
-    else
-      membership.child = -1 ; // on final link
-    
-    // Allow replanning from parent node sink voronoi if new graph was received during last transit
-    if (graphLog && membership.child >= 0){
-      bool diff ;
-      AdjustPath(diff) ;
-    }
-    pubMembership.publish(membership) ; // announce membership change
-  }
-  else { // No voronoi transition detected, determine if currently adjacent to next voronoi
-    bool adj = cellMap.MovingToNextVoronoi(x,y,agents[membership.parent][1]) ;
-    if (adj && graph.wait_to_enter[membership.child]){
-      // Adjacent to next Voronoi, must wait to enter
-      delayed.data = true ;
+  if (membershipAssigned){ // Only begin this routine after goal has been assigned
+    // Determine if Voronoi transit occurred
+    if (curV == agents[membership.parent][1]){
+      ROS_INFO("Voronoi transit detected...") ;
+      // Update memberships
+      linkPath.erase(linkPath.begin()) ; // remove top link from path 
+      if (linkPath.size() > 0)
+        membership.parent = linkPath[0] ;
+      else
+        membership.parent = -1 ; // in final voronoi, curV == goalV
       
-      // Stop platform
-      cmd.linear.x = 0.0 ;
-      cmd.linear.y = 0.0 ;
-      cmd.linear.z = 0.0 ;
-      cmd.angular.x = 0.0 ;
-      cmd.angular.y = 0.0 ;
-      cmd.angular.z = 0.0 ;
+      if (linkPath.size() > 1)
+        membership.child = linkPath[1] ;
+      else
+        membership.child = -1 ; // on final link
       
-      // Allow replanning from parent node sink voronoi if new graph was received since last planning time
-      if (graphLog){
+      // Allow replanning from parent node sink voronoi if new graph was received during last transit
+      if (graphLog && membership.child >= 0){
         bool diff ;
         AdjustPath(diff) ;
-        if (diff)
-          pubMembership.publish(membership) ;
+      }
+      ROS_INFO_STREAM("New membership.parent: " << membership.parent << ", membership.child: " << membership.child) ;
+      pubMembership.publish(membership) ; // announce membership change
+    }
+    else { // No voronoi transition detected, determine if currently adjacent to next voronoi
+      bool adj = cellMap.MovingToNextVoronoi(x,y,agents[membership.parent][1]) ;
+      if (membership.child >= 0 && membership.child < numAgents){
+        if (adj && graph.wait_to_enter[membership.child]){
+          if (!delay)
+            ROS_INFO("Must wait to enter adjacent Voronoi...") ;
+          
+          // Adjacent to next Voronoi, must wait to enter
+          delayed.data = true ;
+          
+          // Stop platform
+          cmd.linear.x = 0.0 ;
+          cmd.linear.y = 0.0 ;
+          cmd.linear.z = 0.0 ;
+          cmd.angular.x = 0.0 ;
+          cmd.angular.y = 0.0 ;
+          cmd.angular.z = 0.0 ;
+          
+          // Allow replanning from parent node sink voronoi if new graph was received since last planning time
+          if (graphLog){
+            bool diff ;
+            AdjustPath(diff) ;
+            if (diff)
+              pubMembership.publish(membership) ;
+          }
+        }
       }
     }
-  }
   
-  if (goalLog){
-    // Publish goal to move_base once processed
-    pubMapGoal.publish(goal) ;
-    goalLog = false ; // current goal has been processed
+    if (goalLog){
+      // Publish goal to move_base once processed
+      pubMapGoal.publish(goal) ;
+      goalLog = false ; // current goal has been processed
+    }
+    pubDelay.publish(delayed) ; // published for rosbag logging
+    pubCmdVel.publish(cmd) ;
   }
-  pubDelay.publish(delayed) ; // published for rosbag logging
-  pubCmdVel.publish(cmd) ;
 }
 
 void Traffic::cmdVelCallback(const geometry_msgs::Twist& msg){
+//  ROS_INFO("***** CmdVel callback *****") ;
   cmd.linear.x = msg.linear.x ;
   cmd.linear.y = msg.linear.y ;
   cmd.linear.z = msg.linear.z ;
@@ -191,6 +214,7 @@ void Traffic::cmdVelCallback(const geometry_msgs::Twist& msg){
 }
 
 void Traffic::goalCallback(const geometry_msgs::Twist& msg){
+  ROS_INFO("***** Goal callback *****") ;
   goal.linear.x = msg.linear.x ;
   goal.linear.y = msg.linear.y ;
   goal.linear.z = msg.linear.z ;
@@ -200,9 +224,12 @@ void Traffic::goalCallback(const geometry_msgs::Twist& msg){
   goalLog = true ;
   
   goalV = cellMap.Membership(goal.linear.x,goal.linear.y) ;
+  ROS_INFO_STREAM("New goal commanded at (" << goal.linear.x << "," << goal.linear.y << "), Voronoi: " << goalV) ;
 }
 
 void Traffic::ComputeHighPath(int s, int g){
+  ROS_INFO("Computing high level path...") ;
+  
   // Using Dijkstra's, only store best parent vertex ID
   vector<int> closed(numVertices,-1) ;
   
@@ -267,19 +294,28 @@ void Traffic::ComputeHighPath(int s, int g){
     while (v != s){
       int p = closed[v] ;
       int ind ;
-      for (size_t i = 0; i < agents.size(); i++)
-        if (agents[i][0] == p && agents[i][1] == v)
+      for (size_t i = 0; i < agents.size(); i++){
+        if (agents[i][0] == p && agents[i][1] == v){
           ind = i ;
+          break ;
+        }
+      }
       rPath.push_back(ind) ;
       v = p ;
     }
+    
     linkPath.clear() ;
-    for (size_t i = rPath.size()-1; i >= 0; i--)
-      linkPath.push_back(rPath[i]) ;
+    for (size_t i = 0; i < rPath.size(); i++){
+      size_t j = rPath.size() - i - 1 ;
+      linkPath.push_back(rPath[j]) ;
+    }
   }
+  graphLog = false ; // latest graph has been accounted for
+  ROS_INFO("High level path calculated...") ;
 }
 
 void Traffic::AdjustPath(bool & diff){
+  ROS_INFO("Replanning path...") ;
   vector<int> oldPath = linkPath ;
   ComputeHighPath(agents[membership.parent][1],goalV) ; // this will update linkPath
   
@@ -316,7 +352,6 @@ void Traffic::AdjustPath(bool & diff){
     linkPath.clear() ;
     linkPath = oldPath ;
   }
-  graphLog = false ; // latest graph has been accounted for
 }
 
 void Traffic::UpdateCostMapLayer(){
