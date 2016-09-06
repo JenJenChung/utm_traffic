@@ -1,0 +1,53 @@
+utm_agent:
+  num_agents: 10
+  num_vertices: 4
+  agent0:
+    v0: 0
+    v1: 1
+    num_walls: 1
+    wall0: [0.5, 0.5, 2.5, 0.5]
+  agent1:
+    v0: 1
+    v1: 0
+    num_walls: 1
+    wall0: [0.5, 0.5, 2.5, 0.5]
+  agent2:
+    v0: 0
+    v1: 2
+    num_walls: 1
+    wall0: [2.5, 0.5, 4.5, -0.5]
+  agent3:
+    v0: 2
+    v1: 0
+    num_walls: 1
+    wall0: [2.5, 0.5, 4.5, -0.5]
+  agent4:
+    v0: 1
+    v1: 2
+    num_walls: 1
+    wall0: [2.5, 0.5, 2.5, 4.5]
+  agent5:
+    v0: 2
+    v1: 1
+    num_walls: 1
+    wall0: [2.5, 0.5, 2.5, 4.5]
+  agent6:
+    v0: 1
+    v1: 3
+    num_walls: 1
+    wall0: [-1.5, 4.5, 0.5, 6.5]
+  agent7:
+    v0: 3
+    v1: 1
+    num_walls: 1
+    wall0: [-1.5, 4.5, 0.5, 6.5]
+  agent8:
+    v0: 2
+    v1: 3
+    num_walls: 1
+    wall0: [2.5, 6.5, 2.5, 8.5]
+  agent9:
+    v0: 3
+    v1: 2
+    num_walls: 1
+    wall0: [2.5, 6.5, 2.5, 8.5]
