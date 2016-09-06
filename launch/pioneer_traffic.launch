@@ -4,6 +4,6 @@
   <rosparam file="$(find utm_traffic)/map/voronoi_small_world.yaml" command="load"/>
   <rosparam file="$(find utm_traffic)/map/voronoi_small_world_cells.yaml" command="load"/>
   <node pkg="utm_traffic" type="pioneer_traffic" respawn="false" name="pioneer_traffic" output="screen">
-    <param name="robot_name" value="$(arg robot_name)"/> 
+    <param name="robot_name" value="'$(arg robot_name)'"/> 
 	</node>
 </launch>

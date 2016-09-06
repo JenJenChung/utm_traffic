@@ -99,8 +99,10 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   
   // Initialise membership robot name
   std::string robot_name ;
-  ros::param::get("robot_name",robot_name) ;
+  ros::param::get("pioneer_traffic/robot_name",robot_name) ;
   membership.robot_name = robot_name ;
+  
+  ROS_INFO_STREAM("Robot name: " << membership.robot_name) ;
   
   ROS_INFO("***** Traffic initialisation complete! *****") ;
 }
