@@ -3,13 +3,14 @@
 #include <float.h>
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include "std_msgs/Bool.h"
 #include "geometry_msgs/Twist.h"
 #include "nav_msgs/Odometry.h"
 #include "agent_msgs/AgentMembership.h" // custom message for reporting parent (current) and child (next) agents
 #include "agent_msgs/UtmGraph.h" // custom message for reporting link traversal costs over entire graph
 #include "agent_msgs/BoolLog.h" // custom message including header and bool type
-#include "map_msgs/OccupancyGridUpdate.h"
+#include "agent_msgs/WallUpdate.h" // custom message defining all walls that must be added or removed
 #include "Voronoi.h"
 
 class Traffic
@@ -62,7 +63,7 @@ class Traffic
     void goalCallback(const geometry_msgs::Twist&) ;
     
     void ComputeHighPath(int, int) ; // Compute sequence of links to traverse
-    void AdjustPath(bool &) ; // Replanning routine, output determines if new membership differs from old membership
+    void AdjustPath(bool &) ; // Replanning routine, output boolean determines if membership change occurred
     void UpdateCostMapLayer() ; // Updates virtual walls in custom move_base costmap layer according to linkPath
     static bool ComparePQueue(vector<double>, vector<double>) ;
 } ;
@@ -77,7 +78,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<map_msgs::OccupancyGridUpdate>("move_base/agent_costmap_updates", 10) ; // TODO: update to relevant layer
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("editWalls", 10) ; // TODO: update to relevant layer
   
   // Read in UTM parameters
   ros::param::get("utm_agent/num_agents", numAgents);
@@ -95,6 +96,11 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   
   // Initialise log delay boolean
   delayed.data = false ;
+  
+  // Initialise membership robot name
+  std::string robot_name ;
+  ros::param::get("robot_name",robot_name) ;
+  membership.robot_name = robot_name ;
   
   ROS_INFO("***** Traffic initialisation complete! *****") ;
 }
@@ -355,7 +361,7 @@ void Traffic::AdjustPath(bool & diff){
 }
 
 void Traffic::UpdateCostMapLayer(){
-  map_msgs::OccupancyGridUpdate update ;
+  agent_msgs::WallUpdate update ;
   pubCostMapUpdate.publish(update) ;
 }
 

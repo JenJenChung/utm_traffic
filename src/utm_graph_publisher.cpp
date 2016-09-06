@@ -16,7 +16,7 @@ int main(int argc, char **argv)
   for (size_t i = 0; i < 10; i++){
     msg.actual_traversal_costs.push_back(10.0) ;
     msg.policy_output_costs.push_back(10.0) ;
-    if (i == 5 || i == 6)
+    if (i == 5 || i == 0)
       msg.wait_to_enter.push_back(true) ;
     else
       msg.wait_to_enter.push_back(false) ;
