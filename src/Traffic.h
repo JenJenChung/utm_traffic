@@ -45,6 +45,7 @@ class Traffic
     int curV ; // current Voronoi parition, must equal agents[membership.parent][0] (initialised to -1)
     int goalV ; // Voronoi partition containing goal state
     vector<int> linkPath ; // list of link agents to goal
+    vector<int> oldPath ; // most recent list of link agents for which virtual walls have been created
     
     bool firstGraph ; // First graph message has been received?
     bool graphLog ; // New graph message has been received since last Voronoi transit?
@@ -64,7 +65,7 @@ class Traffic
     
     void ComputeHighPath(int, int) ; // Compute sequence of links to traverse
     void AdjustPath(bool &) ; // Replanning routine, output boolean determines if membership change occurred
-    void UpdateCostMapLayer() ; // Updates virtual walls in custom move_base costmap layer according to linkPath
+    void UpdateCostMapLayer() ; // Publishes message to edit the virtual walls according to new path
     static bool ComparePQueue(vector<double>, vector<double>) ;
 } ;
 
@@ -92,6 +93,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
     sprintf(buffer, "utm_agent/agent%u/v1", i) ;
     ros::param::get(buffer, temp[1]);
     agents.push_back(temp) ;
+    oldPath.push_back(i) ; // initialise old link path to include all agents (i.e. no walls initially present)
   }
   
   // Initialise log delay boolean
@@ -134,6 +136,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   if (goalLog && firstGraph){
     ROS_INFO("New goal was received...") ;
     ComputeHighPath(curV,goalV) ; // this will update linkPath
+    UpdateCostMapLayer() ; // update virtual walls
     if (linkPath.size() > 0)
       membership.parent = linkPath[0] ;
     else
@@ -143,6 +146,9 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
     else
       membership.child = -1 ;
     
+    ROS_INFO("Link path:") ;
+    for (size_t i = 0; i < linkPath.size(); i++)
+      ROS_INFO_STREAM(linkPath[i]) ;
     pubMembership.publish(membership) ; // announce membership change
     membershipAssigned = true ;
   }
@@ -324,7 +330,6 @@ void Traffic::ComputeHighPath(int s, int g){
 
 void Traffic::AdjustPath(bool & diff){
   ROS_INFO("Replanning path...") ;
-  vector<int> oldPath = linkPath ;
   ComputeHighPath(agents[membership.parent][1],goalV) ; // this will update linkPath
   
   // Determine if new path is different to old path, note that new linkPath does not contain parent link
@@ -363,7 +368,69 @@ void Traffic::AdjustPath(bool & diff){
 }
 
 void Traffic::UpdateCostMapLayer(){
+  ROS_INFO("Updating virtual walls...") ;
   agent_msgs::WallUpdate update ;
+  update.total_changes = 0 ;
+  
+  // Check for walls that must be removed (i.e. in linkPath but not in oldPath)
+  // Check for walls that must be added (i.e. in oldPath but not in linkPath)
+  // Note that agents i and i+1, where i/2 == i+1/2, share the same wall
+  vector<int> toRemove ;
+  vector<int> toAdd ;
+  vector<bool> found(oldPath.size(),false) ;
+  ROS_INFO_STREAM("oldPath.size(): " << oldPath.size()) ;
+  for (size_t i = 0; i < linkPath.size(); i++){
+    bool newLink = true ;
+    for (size_t j = 0; j < oldPath.size(); j++){
+      if (linkPath[i]/2 == oldPath[j]/2){
+        newLink = false ;
+        found[j] = true ;
+      }
+    }
+    if (newLink)
+      toRemove.push_back(linkPath[i]) ;
+  }
+  for (size_t i = 0; i < found.size(); i++)
+    if (!found[i])
+      toAdd.push_back(oldPath[i]) ;
+  
+  ROS_INFO_STREAM("toRemove.size(): " << toRemove.size()) ;
+  ROS_INFO_STREAM("toAdd.size(): " << toAdd.size()) ;
+  char buffer[50] ;
+  for (int i = 0; i < toRemove.size(); i++){
+    int numWalls ;
+    sprintf(buffer, "utm_agent/agent%u/num_walls", i) ;
+    ros::param::get(buffer, numWalls);
+    for (int j = 0; j < numWalls; j++){
+      vector<float> wall ;
+      sprintf(buffer, "utm_agent/agent%u/wall%u", i, j) ;
+      ros::param::get(buffer, wall) ;
+      update.total_changes++ ;
+      update.type.push_back(false) ; // removing wall
+      for (size_t k = 0; k < wall.size(); k++)
+        update.data.push_back(wall[k]) ;
+    }
+  }
+   
+  for (int i = 0; i < toAdd.size(); i++){
+    int numWalls ;
+    sprintf(buffer, "utm_agent/agent%u/num_walls", i) ;
+    ros::param::get(buffer, numWalls);
+    for (int j = 0; j < numWalls; j++){
+      vector<float> wall ;
+      sprintf(buffer, "utm_agent/agent%u/wall%u", i, j) ;
+      ros::param::get(buffer, wall) ;
+      update.total_changes++ ;
+      update.type.push_back(true) ; // adding wall
+      for (size_t k = 0; k < wall.size(); k++)
+        update.data.push_back(wall[k]) ;
+    }
+  }   
+  
+  oldPath.clear() ;
+  oldPath = linkPath ;
+  
+  ROS_INFO("Virtual walls published...") ;
   pubCostMapUpdate.publish(update) ;
 }
 
