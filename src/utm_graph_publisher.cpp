@@ -22,7 +22,7 @@ int main(int argc, char **argv)
       msg.actual_traversal_costs.push_back(10.0) ;
       msg.policy_output_costs.push_back(10.0) ;
     }
-    if (i == 5)
+    if (i == 1)
       msg.wait_to_enter.push_back(true) ;
     else
       msg.wait_to_enter.push_back(false) ;
