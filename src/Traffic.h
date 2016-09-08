@@ -79,7 +79,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("editWalls", 10) ; // TODO: update to relevant layer
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ; // TODO: update to relevant layer
   
   // Read in UTM parameters
   ros::param::get("utm_agent/num_agents", numAgents);
@@ -156,7 +156,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   if (membershipAssigned){ // Only begin this routine after goal has been assigned
     // Determine if Voronoi transit occurred
     if (curV == agents[membership.parent][1]){
-      ROS_INFO("Voronoi transit detected...") ;
+      ROS_INFO("Transit detected...") ;
       // Update memberships
       linkPath.erase(linkPath.begin()) ; // remove top link from path 
       if (linkPath.size() > 0)
@@ -182,7 +182,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
       if (membership.child >= 0 && membership.child < numAgents){
         if (adj && graph.wait_to_enter[membership.child]){
           if (!delay)
-            ROS_INFO("Must wait to enter adjacent Voronoi...") ;
+            ROS_INFO("Must wait to enter adjacent link...") ;
           
           // Adjacent to next Voronoi, must wait to enter
           delayed.data = true ;
@@ -238,7 +238,7 @@ void Traffic::goalCallback(const geometry_msgs::Twist& msg){
   goalLog = true ;
   
   goalV = cellMap.Membership(goal.linear.x,goal.linear.y) ;
-  ROS_INFO_STREAM("New goal commanded at (" << goal.linear.x << "," << goal.linear.y << "), Voronoi: " << goalV) ;
+  ROS_INFO_STREAM("New goal commanded at (" << goal.linear.x << "," << goal.linear.y << "), Sector: " << goalV) ;
 }
 
 void Traffic::ComputeHighPath(int s, int g){
@@ -378,13 +378,21 @@ void Traffic::UpdateCostMapLayer(){
   vector<int> toRemove ;
   vector<int> toAdd ;
   vector<bool> found(oldPath.size(),false) ;
-  ROS_INFO_STREAM("oldPath.size(): " << oldPath.size()) ;
+//  ROS_INFO_STREAM("oldPath.size(): " << oldPath.size()) ;
+//  for (size_t j = 0; j < oldPath.size(); j++)
+//    ROS_INFO_STREAM(oldPath[j]) ;
+//  
+//  ROS_INFO_STREAM("linkPath.size(): " << linkPath.size()) ;
+//  for (size_t j = 0; j < linkPath.size(); j++)
+//    ROS_INFO_STREAM(linkPath[j]) ;
+  
   for (size_t i = 0; i < linkPath.size(); i++){
     bool newLink = true ;
     for (size_t j = 0; j < oldPath.size(); j++){
       if (linkPath[i]/2 == oldPath[j]/2){
         newLink = false ;
         found[j] = true ;
+//        ROS_INFO_STREAM("link: " << oldPath[j] << " on old path will be removed") ;
       }
     }
     if (newLink)
@@ -394,16 +402,21 @@ void Traffic::UpdateCostMapLayer(){
     if (!found[i])
       toAdd.push_back(oldPath[i]) ;
   
-  ROS_INFO_STREAM("toRemove.size(): " << toRemove.size()) ;
-  ROS_INFO_STREAM("toAdd.size(): " << toAdd.size()) ;
+//  ROS_INFO_STREAM("toRemove.size(): " << toRemove.size()) ;
+//  for (size_t i = 0; i < toRemove.size(); i++)
+//    ROS_INFO_STREAM(toRemove[i]) ;
+//  ROS_INFO_STREAM("toAdd.size(): " << toAdd.size()) ;
+//  for (size_t i = 0; i < toAdd.size(); i++)
+//    ROS_INFO_STREAM(toAdd[i]) ;
+  
   char buffer[50] ;
   for (int i = 0; i < toRemove.size(); i++){
     int numWalls ;
-    sprintf(buffer, "utm_agent/agent%u/num_walls", i) ;
+    sprintf(buffer, "utm_agent/agent%u/num_walls", toRemove[i]) ;
     ros::param::get(buffer, numWalls);
     for (int j = 0; j < numWalls; j++){
       vector<float> wall ;
-      sprintf(buffer, "utm_agent/agent%u/wall%u", i, j) ;
+      sprintf(buffer, "utm_agent/agent%u/wall%u", toRemove[i], j) ;
       ros::param::get(buffer, wall) ;
       update.total_changes++ ;
       update.type.push_back(false) ; // removing wall
@@ -414,11 +427,11 @@ void Traffic::UpdateCostMapLayer(){
    
   for (int i = 0; i < toAdd.size(); i++){
     int numWalls ;
-    sprintf(buffer, "utm_agent/agent%u/num_walls", i) ;
+    sprintf(buffer, "utm_agent/agent%u/num_walls", toAdd[i]) ;
     ros::param::get(buffer, numWalls);
     for (int j = 0; j < numWalls; j++){
       vector<float> wall ;
-      sprintf(buffer, "utm_agent/agent%u/wall%u", i, j) ;
+      sprintf(buffer, "utm_agent/agent%u/wall%u", toAdd[i], j) ;
       ros::param::get(buffer, wall) ;
       update.total_changes++ ;
       update.type.push_back(true) ; // adding wall
