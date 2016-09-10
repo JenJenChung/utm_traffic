@@ -9,7 +9,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "utm_graph_publisher");
 
   ros::NodeHandle nHandpub;
-  ros::Publisher pub = nHandpub.advertise<agent_msgs::UtmGraph>("/pioneer1/utm_graph", 10, true);
+  ros::Publisher pub = nHandpub.advertise<agent_msgs::UtmGraph>("/utm_graph", 10, true);
   
   agent_msgs::UtmGraph msg ;
   
@@ -22,7 +22,7 @@ int main(int argc, char **argv)
       msg.actual_traversal_costs.push_back(10.0) ;
       msg.policy_output_costs.push_back(10.0) ;
     }
-    if (i == 1)
+    if (i == -1)
       msg.wait_to_enter.push_back(true) ;
     else
       msg.wait_to_enter.push_back(false) ;

@@ -66,6 +66,9 @@ bool Voronoi::MovingToNextVoronoi(double x, double y, int nextV){
   WorldToCells(x,y,mx,my) ;
   int curV = cells[mx][my] ;
   
+  if (curV == -1) // if in any cell deemed an obstacle, continue along designated path
+    return false ;
+  
   // Compute valid neighbour cells
   vector<int> v(2) ;
   vector< vector<int> > nCells ;

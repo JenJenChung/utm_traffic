@@ -71,7 +71,7 @@ class Traffic
 
 Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), firstGraph(false), membershipAssigned(false), goalLog(false){
   // Initialise pub/sub nodes
-  subAgentGraph = nh.subscribe("utm_graph", 10, &Traffic::graphCallback, this) ;
+  subAgentGraph = nh.subscribe("/utm_graph", 10, &Traffic::graphCallback, this) ;
   subOdom = nh.subscribe("odom", 10, &Traffic::odomCallback, this) ;
   subCmdVel = nh.subscribe("recovery_cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
   subGoal = nh.subscribe("cmd_map_goal", 10, &Traffic::goalCallback, this) ;
@@ -79,7 +79,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ; // TODO: update to relevant layer
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ; // TODO: update to relevant layer
   
   // Read in UTM parameters
   ros::param::get("utm_agent/num_agents", numAgents);
