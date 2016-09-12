@@ -123,6 +123,10 @@ add_executable(pioneer_traffic src/pioneer_traffic.cpp)
 target_link_libraries(pioneer_traffic ${catkin_LIBRARIES})
 add_dependencies(pioneer_traffic ${catkin_EXPORTED_TARGETS})
 
+add_executable(pioneer_traffic_sim src/pioneer_traffic_sim.cpp)
+target_link_libraries(pioneer_traffic_sim ${catkin_LIBRARIES})
+add_dependencies(pioneer_traffic_sim ${catkin_EXPORTED_TARGETS})
+
 add_executable(utm_graph_publisher src/utm_graph_publisher.cpp)
 target_link_libraries(utm_graph_publisher ${catkin_LIBRARIES})
 add_dependencies(utm_graph_publisher ${catkin_EXPORTED_TARGETS})
