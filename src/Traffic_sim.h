@@ -79,7 +79,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("pioneer/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ; // TODO: update to relevant layer
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ;
   
   // Read in UTM parameters
   ros::param::get("utm_agent/num_agents", numAgents);
@@ -129,7 +129,10 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   delayed.data = false ;
   
   // Compute current membership
-  curV = cellMap.Membership(x,y) ;
+  int newV = cellMap.Membership(x,y) ;
+  if (newV >= 0)
+    curV = newV ;
+    
 //  ROS_INFO_STREAM("Current position: (" << x << "," << y << "), Voronoi: " << curV ) ;
   
   // Plan from current position if new goal was received and graph was received
