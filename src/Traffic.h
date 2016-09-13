@@ -79,7 +79,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("/RosAria/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ; layer
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ;
   
   // Read in UTM parameters
   ros::param::get("utm_agent/num_agents", numAgents);
