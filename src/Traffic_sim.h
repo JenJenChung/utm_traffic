@@ -129,6 +129,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   delayed.data = false ;
   
   // Compute current membership
+//  curV = cellMap.Membership(x,y) ;
   int newV = cellMap.Membership(x,y) ;
   if (newV >= 0)
     curV = newV ;
