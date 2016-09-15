@@ -294,7 +294,7 @@ void Traffic::ComputeHighPath(int s, int g){
         if ((int)pQueue[j][0] == c[i]){
           if (pQueue[j][2] > d[i]){
             pQueue[j][1] = v[0] ; // change best parent
-            pQueue[j][2] = d[1] ; // change cost to arrive
+            pQueue[j][2] = d[i] ; // change cost to arrive
           }
           break ;
         }

@@ -127,6 +127,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   delayed.header = msg.header ; // copy over header from odometry
   bool delay = delayed.data ;
   delayed.data = false ;
+
   
   // Compute current membership
 //  curV = cellMap.Membership(x,y) ;
@@ -296,7 +297,7 @@ void Traffic::ComputeHighPath(int s, int g){
         if ((int)pQueue[j][0] == c[i]){
           if (pQueue[j][2] > d[i]){
             pQueue[j][1] = v[0] ; // change best parent
-            pQueue[j][2] = d[1] ; // change cost to arrive
+            pQueue[j][2] = d[i] ; // change cost to arrive
           }
           break ;
         }
@@ -305,7 +306,7 @@ void Traffic::ComputeHighPath(int s, int g){
   }
   
   if (!gReached)
-    std::cout << "Error [Traffic::ComputeHighpath()]: no path found!\n" ;
+    ROS_INFO("Error [Traffic::ComputeHighpath()]: no path found!") ;
   else {
     int v = g ;
     vector<int> rPath ; // path from goal to source
