@@ -120,6 +120,11 @@ void Traffic::graphCallback(const agent_msgs::UtmGraph& msg){
 }
 
 void Traffic::odomCallback(const nav_msgs::Odometry& msg){
+  // I think this function is being called before something else
+  // This would explain the inconsistency of this error (due to threading)
+  if(membership.parent == -1)
+    membershipAssigned = false;
+  
 //  ROS_INFO("***** Odom callback *****") ;
   double x = msg.pose.pose.position.x ;
   double y = msg.pose.pose.position.y ;
@@ -130,7 +135,6 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
 
   
   // Compute current membership
-//  curV = cellMap.Membership(x,y) ;
   int newV = cellMap.Membership(x,y) ;
   if (newV >= 0)
     curV = newV ;
@@ -144,8 +148,11 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
     UpdateCostMapLayer() ; // update virtual walls
     if (linkPath.size() > 0)
       membership.parent = linkPath[0] ;
-    else
+    else{
       membership.parent = -1 ; // this should never be triggered here, i.e. no consecutive goals should be in same voronoi
+      ROS_ERROR("Consecutive goals in same Voronoi cell");
+    }
+    
     if (linkPath.size() > 1)
       membership.child = linkPath[1] ;
     else
@@ -217,8 +224,9 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
       goalLog = false ; // current goal has been processed
     }
     pubDelay.publish(delayed) ; // published for rosbag logging
-    pubCmdVel.publish(cmd) ;
+    
   }
+  pubCmdVel.publish(cmd) ;
 }
 
 void Traffic::cmdVelCallback(const geometry_msgs::Twist& msg){
@@ -306,8 +314,11 @@ void Traffic::ComputeHighPath(int s, int g){
   }
   
   if (!gReached)
-    ROS_INFO("Error [Traffic::ComputeHighpath()]: no path found!") ;
-  else {
+    ROS_ERROR("[Traffic::ComputeHighpath()]: no path found!") ;
+  else if(s == g){
+    ROS_INFO("Start equals goal");
+    return;
+  } else {
     int v = g ;
     vector<int> rPath ; // path from goal to source
     while (v != s){
