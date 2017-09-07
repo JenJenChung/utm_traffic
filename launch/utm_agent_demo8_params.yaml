@@ -1,0 +1,97 @@
+utm_agents: 
+  num_agents: 18
+  num_vertices: 6
+  agent0:
+    v0: 0
+    v1: 1
+    num_walls: 1
+    wall0: [-1.09, 1.22, 0.91, 1.22]
+  agent1:
+    v0: 1
+    v1: 0
+    num_walls: 1
+    wall0: [-1.09, 1.22, 0.91, 1.22]
+  agent2:
+    v0: 0
+    v1: 2
+    num_walls: 1
+    wall0: [0.91, -0.61, 0.91, 0.76]
+  agent3:
+    v0: 2
+    v1: 0
+    num_walls: 1
+    wall0: [0.91, -0.61, 0.91, 0.76]
+  agent4:
+    v0: 0
+    v1: 4
+    num_walls: 1
+    wall0: [0.91, -2.13, 0.91, -0.61]
+  agent5:
+    v0: 4
+    v1: 0
+    num_walls: 1
+    wall0: [0.91, -2.13, 0.91, -0.61]
+  agent6:
+    v0: 1
+    v1: 3
+    num_walls: 1
+    wall0: [0.91, 1.68, 0.91, 3.35]
+  agent7:
+    v0: 3
+    v1: 1
+    num_walls: 1
+    wall0: [0.91, 1.68, 0.91, 3.35]
+  agent8:
+    v0: 1
+    v1: 5
+    num_walls: 1
+    wall0: [0.91, 3.35, 0.91, 5.06]
+  agent9:
+    v0: 5
+    v1: 1
+    num_walls: 1
+    wall0: [0.91, 3.35, 0.91, 5.06]
+  agent10:
+    v0: 2
+    v1: 3
+    num_walls: 1
+    wall0: [2.89, 1.22, 4.14, 1.22]
+  agent11:
+    v0: 3
+    v1: 2
+    num_walls: 1
+    wall0: [2.89, 1.22, 4.14, 1.22]
+  agent12:
+    v0: 2
+    v1: 4
+    num_walls: 2
+    wall0: [3.45, -0.61, 4.27, -0.61]
+    wall1: [4.27, -0.61, 4.27, 1.22]
+  agent13:
+    v0: 4
+    v1: 2
+    num_walls: 2
+    wall0: [3.45, -0.61, 4.27, -0.61]
+    wall1: [4.27, -0.61, 4.27, 1.22]
+  agent14:
+    v0: 3
+    v1: 5
+    num_walls: 2
+    wall0: [3.45, 3.35, 4.27, 3.35]
+    wall1: [4.27, 3.35, 4.27, 1.22]
+  agent15:
+    v0: 5
+    v1: 3
+    num_walls: 2
+    wall0: [3.45, 3.35, 4.27, 3.35]
+    wall1: [4.27, 3.35, 4.27, 1.22]
+  agent16:
+    v0: 4
+    v1: 5
+    num_walls: 1
+    wall0: [4.46, 1.22, 6.00, 1.22]
+  agent17:
+    v0: 3
+    v1: 1
+    num_walls: 1
+    wall0: [4.46, 1.22, 6.00, 1.22]

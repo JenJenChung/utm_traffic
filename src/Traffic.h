@@ -82,15 +82,15 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ;
   
   // Read in UTM parameters
-  ros::param::get("utm_agent/num_agents", numAgents);
-  ros::param::get("utm_agent/num_vertices", numVertices);
+  ros::param::get("/utm_agents/num_agents", numAgents);
+  ros::param::get("/utm_agents/num_vertices", numVertices);
   
   char buffer[50] ;
   for (int i = 0; i < numAgents; i++){
     vector<int> temp(2,0) ;
-    sprintf(buffer, "utm_agent/agent%u/v0", i) ;
+    sprintf(buffer, "/utm_agents/agent%u/v0", i) ;
     ros::param::get(buffer, temp[0]);
-    sprintf(buffer, "utm_agent/agent%u/v1", i) ;
+    sprintf(buffer, "/utm_agents/agent%u/v1", i) ;
     ros::param::get(buffer, temp[1]);
     agents.push_back(temp) ;
     oldPath.push_back(i) ; // initialise old link path to include all agents (i.e. no walls initially present)
@@ -414,11 +414,11 @@ void Traffic::UpdateCostMapLayer(){
   char buffer[50] ;
   for (int i = 0; i < toRemove.size(); i++){
     int numWalls ;
-    sprintf(buffer, "utm_agent/agent%u/num_walls", toRemove[i]) ;
+    sprintf(buffer, "/utm_agents/agent%u/num_walls", toRemove[i]) ;
     ros::param::get(buffer, numWalls);
     for (int j = 0; j < numWalls; j++){
       vector<float> wall ;
-      sprintf(buffer, "utm_agent/agent%u/wall%u", toRemove[i], j) ;
+      sprintf(buffer, "/utm_agents/agent%u/wall%u", toRemove[i], j) ;
       ros::param::get(buffer, wall) ;
       update.total_changes++ ;
       update.type.push_back(false) ; // removing wall
@@ -429,11 +429,11 @@ void Traffic::UpdateCostMapLayer(){
    
   for (int i = 0; i < toAdd.size(); i++){
     int numWalls ;
-    sprintf(buffer, "utm_agent/agent%u/num_walls", toAdd[i]) ;
+    sprintf(buffer, "/utm_agents/agent%u/num_walls", toAdd[i]) ;
     ros::param::get(buffer, numWalls);
     for (int j = 0; j < numWalls; j++){
       vector<float> wall ;
-      sprintf(buffer, "utm_agent/agent%u/wall%u", toAdd[i], j) ;
+      sprintf(buffer, "/utm_agents/agent%u/wall%u", toAdd[i], j) ;
       ros::param::get(buffer, wall) ;
       update.total_changes++ ;
       update.type.push_back(true) ; // adding wall

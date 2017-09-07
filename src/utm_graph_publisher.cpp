@@ -13,14 +13,14 @@ int main(int argc, char **argv)
   
   agent_msgs::UtmGraph msg ;
   
-  for (size_t i = 0; i < 10; i++){
+  for (size_t i = 0; i < 18; i++){
     if (i == -1){
-      msg.actual_traversal_costs.push_back(10.0) ;
-      msg.policy_output_costs.push_back(100.0) ;
+      msg.actual_traversal_costs.push_back(0.0) ;
+      msg.policy_output_costs.push_back(0.0) ;
     }
     else{
-      msg.actual_traversal_costs.push_back(10.0) ;
-      msg.policy_output_costs.push_back(10.0) ;
+      msg.actual_traversal_costs.push_back(0.0) ;
+      msg.policy_output_costs.push_back(0.0) ;
     }
     if (i == -1)
       msg.wait_to_enter.push_back(true) ;
