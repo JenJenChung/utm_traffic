@@ -71,15 +71,15 @@ class Traffic
 
 Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), firstGraph(false), membershipAssigned(false), goalLog(false){
   // Initialise pub/sub nodes
-  subAgentGraph = nh.subscribe("utm_graph", 10, &Traffic::graphCallback, this) ;
-  subOdom = nh.subscribe("odom_map", 10, &Traffic::odomCallback, this) ;
+  subAgentGraph = nh.subscribe("/utm_graph", 10, &Traffic::graphCallback, this) ;
+  subOdom = nh.subscribe("odom", 10, &Traffic::odomCallback, this) ;
   subCmdVel = nh.subscribe("recovery_cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
   subGoal = nh.subscribe("cmd_map_goal", 10, &Traffic::goalCallback, this) ;
   pubMembership = nh.advertise<agent_msgs::AgentMembership>("membership", 10, true) ;
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("/RosAria/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
-  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("/editWalls", 10, true) ;
+  pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ;
   
   // Read in UTM parameters
   ros::param::get("/utm_agents/num_agents", numAgents);
@@ -120,6 +120,11 @@ void Traffic::graphCallback(const agent_msgs::UtmGraph& msg){
 }
 
 void Traffic::odomCallback(const nav_msgs::Odometry& msg){
+  // I think this function is being called before something else
+  // This would explain the inconsistency of this error (due to threading)
+  if(membership.parent == -1)
+    membershipAssigned = false;
+  
 //  ROS_INFO("***** Odom callback *****") ;
   double x = msg.pose.pose.position.x ;
   double y = msg.pose.pose.position.y ;
@@ -127,22 +132,27 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   delayed.header = msg.header ; // copy over header from odometry
   bool delay = delayed.data ;
   delayed.data = false ;
+
   
   // Compute current membership
   int newV = cellMap.Membership(x,y) ;
   if (newV >= 0)
     curV = newV ;
+    
 //  ROS_INFO_STREAM("Current position: (" << x << "," << y << "), Voronoi: " << curV ) ;
   
   // Plan from current position if new goal was received and graph was received
   if (goalLog && firstGraph){
-    ROS_INFO_STREAM("New goal was received, current position: (" << x  << "," << y << ") current sector: " << curV) ;
+    ROS_INFO("New goal was received...") ;
     ComputeHighPath(curV,goalV) ; // this will update linkPath
     UpdateCostMapLayer() ; // update virtual walls
     if (linkPath.size() > 0)
       membership.parent = linkPath[0] ;
-    else
+    else{
       membership.parent = -1 ; // this should never be triggered here, i.e. no consecutive goals should be in same voronoi
+      ROS_ERROR("Consecutive goals in same Voronoi cell");
+    }
+    
     if (linkPath.size() > 1)
       membership.child = linkPath[1] ;
     else
@@ -156,8 +166,8 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   }
   
   if (membershipAssigned){ // Only begin this routine after goal has been assigned
-    // Determine if Voronoi transit occurred
-    if (curV == agents[membership.parent][1]){
+    if (membership.parent == -1){} // avoid superfluous transitions from odom errors on last leg
+    else if (curV == agents[membership.parent][1]){ // Determine if Voronoi transit occurred
       ROS_INFO("Transit detected...") ;
       // Update memberships
       linkPath.erase(linkPath.begin()) ; // remove top link from path 
@@ -214,8 +224,9 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
       goalLog = false ; // current goal has been processed
     }
     pubDelay.publish(delayed) ; // published for rosbag logging
-    pubCmdVel.publish(cmd) ;
+    
   }
+  pubCmdVel.publish(cmd) ;
 }
 
 void Traffic::cmdVelCallback(const geometry_msgs::Twist& msg){
@@ -303,8 +314,11 @@ void Traffic::ComputeHighPath(int s, int g){
   }
   
   if (!gReached)
-    std::cout << "Error [Traffic::ComputeHighpath()]: no path found!\n" ;
-  else {
+    ROS_ERROR("[Traffic::ComputeHighpath()]: no path found!") ;
+  else if(s == g){
+    ROS_INFO("Start equals goal");
+    return;
+  } else {
     int v = g ;
     vector<int> rPath ; // path from goal to source
     while (v != s){
