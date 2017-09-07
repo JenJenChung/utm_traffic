@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   geometry_msgs
   nav_msgs
+  agent_msgs
   roscpp
   rospy
 )
@@ -104,7 +105,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES utm_traffic
-#  CATKIN_DEPENDS std_msgs agent_msgs geometry_msgs nav_msgs roscpp
+  CATKIN_DEPENDS std_msgs agent_msgs geometry_msgs nav_msgs roscpp rospy
 #  DEPENDS system_lib
 )
 
