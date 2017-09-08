@@ -5,5 +5,6 @@
   <node pkg="utm_traffic" type="pioneer_traffic" respawn="false" name="pioneer_traffic" output="screen">
     <param name="robot_name" value="'$(arg robot_name)'"/>
     <remap from="membership" to="$(arg robot_name)/membership"/>
+    <remap from="delayed" to="$(arg robot_name)/delayed"/>
   </node>
 </launch>
