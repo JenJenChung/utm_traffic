@@ -7,6 +7,7 @@
 #include "std_msgs/Bool.h"
 #include "geometry_msgs/Twist.h"
 #include "nav_msgs/Odometry.h"
+#include "actionlib_msgs/GoalID.h"
 #include "agent_msgs/AgentMembership.h" // custom message for reporting parent (current) and child (next) agents
 #include "agent_msgs/UtmGraph.h" // custom message for reporting link traversal costs over entire graph
 #include "agent_msgs/BoolLog.h" // custom message including header and bool type
@@ -30,6 +31,7 @@ class Traffic
     ros::Publisher pubDelay ;
     ros::Publisher pubCostMapUpdate ;
     ros::Publisher pubMapGoal ;
+    ros::Publisher pubGoalCancel ;
     
     agent_msgs::AgentMembership membership ;
     agent_msgs::UtmGraph graph ;
@@ -80,6 +82,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
   pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ;
+  pubGoalCancel = nh.advertise<actionlib_msgs::GoalID>("move_base/cancel", 10) ;
   
   // Read in UTM parameters
   ros::param::get("/utm_agents/num_agents", numAgents);
@@ -150,7 +153,9 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
       membership.parent = linkPath[0] ;
     else{
       membership.parent = -1 ; // this should never be triggered here, i.e. no consecutive goals should be in same voronoi
-      ROS_ERROR("Consecutive goals in same Voronoi cell");
+      ROS_ERROR("Assigned goal must be in different sector.");
+      actionlib_msgs::GoalID goalCancel ;
+      pubGoalCancel.publish(goalCancel) ;
     }
     
     if (linkPath.size() > 1)
