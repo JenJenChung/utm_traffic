@@ -74,7 +74,7 @@ class Traffic
 Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), firstGraph(false), membershipAssigned(false), goalLog(false){
   // Initialise pub/sub nodes
   subAgentGraph = nh.subscribe("/utm_graph", 10, &Traffic::graphCallback, this) ;
-  subOdom = nh.subscribe("odom", 10, &Traffic::odomCallback, this) ;
+  subOdom = nh.subscribe("odom_map", 10, &Traffic::odomCallback, this) ;
   subCmdVel = nh.subscribe("recovery_cmd_vel", 10, &Traffic::cmdVelCallback, this) ;
   subGoal = nh.subscribe("cmd_map_goal", 10, &Traffic::goalCallback, this) ;
   pubMembership = nh.advertise<agent_msgs::AgentMembership>("membership", 10, true) ;
