@@ -1,0 +1,7 @@
+voronoi_map:
+  rows: 28
+  columns: 28
+  resolution: 1.00000
+  cell_offset:
+    x: 3
+    y: 23

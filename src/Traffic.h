@@ -395,22 +395,14 @@ void Traffic::UpdateCostMapLayer(){
   
   // Check for walls that must be removed (i.e. in linkPath but not in oldPath)
   // Check for walls that must be added (i.e. in oldPath but not in linkPath)
-  // Note that agents i and i+1, where i/2 == i+1/2, share the same wall
   vector<int> toRemove ;
   vector<int> toAdd ;
   vector<bool> found(oldPath.size(),false) ;
-//  ROS_INFO_STREAM("oldPath.size(): " << oldPath.size()) ;
-//  for (size_t j = 0; j < oldPath.size(); j++)
-//    ROS_INFO_STREAM(oldPath[j]) ;
-//  
-//  ROS_INFO_STREAM("linkPath.size(): " << linkPath.size()) ;
-//  for (size_t j = 0; j < linkPath.size(); j++)
-//    ROS_INFO_STREAM(linkPath[j]) ;
   
   for (size_t i = 0; i < linkPath.size(); i++){
     bool newLink = true ;
-    for (size_t j = 0; j < oldPath.size(); j++){
-      if (linkPath[i]/2 == oldPath[j]/2){
+    for (size_t j = 0; j < oldPath.size(); j++){ // Checks for paired agents (agents that share a wall)
+      if (linkPath[i] == oldPath[j] || (agents[linkPath[i]][1] == agents[oldPath[j]][0] && agents[linkPath[i]][0] == agents[oldPath[j]][1])){
         newLink = false ;
         found[j] = true ;
 //        ROS_INFO_STREAM("link: " << oldPath[j] << " on old path will be removed") ;

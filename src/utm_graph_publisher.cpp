@@ -13,7 +13,7 @@ int main(int argc, char **argv)
   
   agent_msgs::UtmGraph msg ;
   
-  for (size_t i = 0; i < 18; i++){
+  for (size_t i = 0; i < 38; i++){
     if (i == -1){
       msg.actual_traversal_costs.push_back(0.0) ;
       msg.policy_output_costs.push_back(0.0) ;

@@ -1,0 +1,10 @@
+<launch>
+  <arg name="robot_name"/>
+  <rosparam file="$(find utm_traffic)/map/voronoi_utm_auro.yaml" command="load"/>
+  <rosparam file="$(find utm_traffic)/map/voronoi_utm_auro_cells.yaml" command="load"/>
+  <node pkg="utm_traffic" type="pioneer_traffic" respawn="false" name="pioneer_traffic" output="screen">
+    <param name="robot_name" value="'$(arg robot_name)'"/>
+    <remap from="odom_map" to="odom"/>
+    <remap from="/RosAria/cmd_vel" to="pioneer/cmd_vel"/>
+  </node>
+</launch>
