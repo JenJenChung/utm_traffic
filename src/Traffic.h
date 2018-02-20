@@ -65,9 +65,9 @@ class Traffic
     void cmdVelCallback(const geometry_msgs::Twist&) ;
     void goalCallback(const geometry_msgs::Twist&) ;
     
-    void ComputeHighPath(int, int) ; // Compute sequence of links to traverse
+    void ComputeHighPath(int, int, bool dd = true) ; // Compute sequence of links to traverse
     void AdjustPath(bool &) ; // Replanning routine, output boolean determines if membership change occurred
-    void UpdateCostMapLayer() ; // Publishes message to edit the virtual walls according to new path
+    void UpdateCostMapLayer(bool dd = true) ; // Publishes message to edit the virtual walls according to new path
     static bool ComparePQueue(vector<double>, vector<double>) ;
 } ;
 
@@ -146,14 +146,15 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   
   // Plan from current position if new goal was received and graph was received
   if (goalLog && firstGraph){
-    ROS_INFO("New goal was received...") ;
-    ComputeHighPath(curV,goalV) ; // this will update linkPath
-    UpdateCostMapLayer() ; // update virtual walls
+    if (!delay)
+      ROS_INFO_STREAM(membership.robot_name << ": New goal was received...") ;
+    ComputeHighPath(curV,goalV,delay) ; // this will update linkPath
+    UpdateCostMapLayer(delay) ; // update virtual walls
     if (linkPath.size() > 0)
       membership.parent = linkPath[0] ;
     else{
       membership.parent = -1 ; // this should never be triggered here, i.e. no consecutive goals should be in same voronoi
-      ROS_ERROR("Assigned goal must be in different sector.");
+      ROS_ERROR_STREAM(membership.robot_name << ": Assigned goal must be in different sector.");
       actionlib_msgs::GoalID goalCancel ;
       pubGoalCancel.publish(goalCancel) ;
     }
@@ -163,9 +164,32 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
     else
       membership.child = -1 ;
     
-    ROS_INFO("Link path:") ;
-    for (size_t i = 0; i < linkPath.size(); i++)
-      ROS_INFO_STREAM(linkPath[i]) ;
+    if (!delay){
+      ROS_INFO_STREAM(membership.robot_name << ": Link path:") ;
+      for (size_t i = 0; i < linkPath.size(); i++)
+        ROS_INFO_STREAM(linkPath[i]) ;
+    }
+    
+    if (graph.wait_to_enter[membership.parent]){
+      if (!delay)
+        ROS_INFO_STREAM(membership.robot_name << ": Must wait to enter first link...") ;
+      
+      // Adjacent to next Voronoi, must wait to enter
+      delayed.data = true ;
+      
+      // Stop platform
+      cmd.linear.x = 0.0 ;
+      cmd.linear.y = 0.0 ;
+      cmd.linear.z = 0.0 ;
+      cmd.angular.x = 0.0 ;
+      cmd.angular.y = 0.0 ;
+      cmd.angular.z = 0.0 ;
+      
+      pubDelay.publish(delayed) ; // published for rosbag logging
+      
+      return ;
+    }
+    
     pubMembership.publish(membership) ; // announce membership change
     membershipAssigned = true ;
   }
@@ -173,7 +197,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
   if (membershipAssigned){ // Only begin this routine after goal has been assigned
     if (membership.parent == -1){} // avoid superfluous transitions from odom errors on last leg
     else if (curV == agents[membership.parent][1]){ // Determine if Voronoi transit occurred
-      ROS_INFO("Transit detected...") ;
+      ROS_INFO_STREAM(membership.robot_name << ": Transit detected...") ;
       // Update memberships
       linkPath.erase(linkPath.begin()) ; // remove top link from path 
       if (linkPath.size() > 0)
@@ -191,7 +215,7 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
         bool diff ;
         AdjustPath(diff) ;
       }
-      ROS_INFO_STREAM("New membership.parent: " << membership.parent << ", membership.child: " << membership.child) ;
+      ROS_INFO_STREAM(membership.robot_name << ": New membership.parent: " << membership.parent << ", membership.child: " << membership.child) ;
       pubMembership.publish(membership) ; // announce membership change
     }
     else { // No voronoi transition detected, determine if currently adjacent to next voronoi
@@ -256,11 +280,12 @@ void Traffic::goalCallback(const geometry_msgs::Twist& msg){
   goalLog = true ;
   
   goalV = cellMap.Membership(goal.linear.x,goal.linear.y) ;
-  ROS_INFO_STREAM("New goal commanded at (" << goal.linear.x << "," << goal.linear.y << "), Sector: " << goalV) ;
+  ROS_INFO_STREAM(membership.robot_name << ": New goal commanded at (" << goal.linear.x << "," << goal.linear.y << "), Sector: " << goalV) ;
 }
 
-void Traffic::ComputeHighPath(int s, int g){
-  ROS_INFO("Computing high level path...") ;
+void Traffic::ComputeHighPath(int s, int g, bool dd){
+  if (!dd)
+    ROS_INFO_STREAM(membership.robot_name << ": Computing high level path...") ;
   
   // Using Dijkstra's, only store best parent vertex ID
   vector<int> closed(numVertices,-1) ;
@@ -319,9 +344,9 @@ void Traffic::ComputeHighPath(int s, int g){
   }
   
   if (!gReached)
-    ROS_ERROR("[Traffic::ComputeHighpath()]: no path found!") ;
+    ROS_ERROR_STREAM(membership.robot_name << ": [Traffic::ComputeHighpath()]: no path found!") ;
   else if(s == g){
-    ROS_INFO("Start equals goal");
+    ROS_INFO_STREAM(membership.robot_name << ": Start equals goal");
     return;
   } else {
     int v = g ;
@@ -346,11 +371,12 @@ void Traffic::ComputeHighPath(int s, int g){
     }
   }
   graphLog = false ; // latest graph has been accounted for
-  ROS_INFO("High level path calculated...") ;
+  if (!dd)
+    ROS_INFO_STREAM(membership.robot_name << ": High level path calculated...") ;
 }
 
 void Traffic::AdjustPath(bool & diff){
-  ROS_INFO("Replanning path...") ;
+  ROS_INFO_STREAM(membership.robot_name << ": Replanning path...") ;
   ComputeHighPath(agents[membership.parent][1],goalV) ; // this will update linkPath
   
   // Determine if new path is different to old path, note that new linkPath does not contain parent link
@@ -388,8 +414,9 @@ void Traffic::AdjustPath(bool & diff){
   }
 }
 
-void Traffic::UpdateCostMapLayer(){
-  ROS_INFO("Updating virtual walls...") ;
+void Traffic::UpdateCostMapLayer(bool dd){
+  if (!dd)
+    ROS_INFO_STREAM(membership.robot_name << ": Updating virtual walls...") ;
   agent_msgs::WallUpdate update ;
   update.total_changes = 0 ;
   
@@ -456,7 +483,8 @@ void Traffic::UpdateCostMapLayer(){
   oldPath.clear() ;
   oldPath = linkPath ;
   
-  ROS_INFO("Virtual walls published...") ;
+  if (!dd)
+    ROS_INFO_STREAM(membership.robot_name << ": Virtual walls published...") ;
   pubCostMapUpdate.publish(update) ;
 }
 
