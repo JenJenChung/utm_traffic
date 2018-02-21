@@ -7,4 +7,8 @@
     <remap from="odom_map" to="odom"/>
     <remap from="/RosAria/cmd_vel" to="pioneer/cmd_vel"/>
   </node>
+  <node pkg="utm_traffic" type="pioneer_traffic_logger" respawn="false" name="pioneer_traffic_logger" output="screen">
+    <param name="robot_name" value="'$(arg robot_name)'"/>
+    <param name="output_logs" value="/home/jchu2041/catkin_ws/src/utm_traffic/log.csv"/>
+  </node>
 </launch>

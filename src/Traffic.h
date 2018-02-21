@@ -6,6 +6,7 @@
 #include <string>
 #include "std_msgs/Bool.h"
 #include "geometry_msgs/Twist.h"
+#include "geometry_msgs/PoseStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "actionlib_msgs/GoalID.h"
 #include "agent_msgs/AgentMembership.h" // custom message for reporting parent (current) and child (next) agents
@@ -31,6 +32,7 @@ class Traffic
     ros::Publisher pubDelay ;
     ros::Publisher pubCostMapUpdate ;
     ros::Publisher pubMapGoal ;
+    ros::Publisher pubGoalTime ;
     ros::Publisher pubGoalCancel ;
     
     agent_msgs::AgentMembership membership ;
@@ -81,6 +83,7 @@ Traffic::Traffic(ros::NodeHandle nh): curV(-1), cmdLog(false), graphLog(false), 
   pubCmdVel = nh.advertise<geometry_msgs::Twist>("/RosAria/cmd_vel", 10, true) ;
   pubDelay = nh.advertise<agent_msgs::BoolLog>("delayed", 10) ;
   pubMapGoal = nh.advertise<geometry_msgs::Twist>("map_goal", 10) ;
+  pubGoalTime = nh.advertise<geometry_msgs::PoseStamped>("goal_cmd_time", 10, true) ;
   pubCostMapUpdate = nh.advertise<agent_msgs::WallUpdate>("move_base/global_costmap/blocking_layer/editWalls", 10, true) ;
   pubGoalCancel = nh.advertise<actionlib_msgs::GoalID>("move_base/cancel", 10) ;
   
@@ -250,6 +253,17 @@ void Traffic::odomCallback(const nav_msgs::Odometry& msg){
     if (goalLog){
       // Publish goal to move_base once processed
       pubMapGoal.publish(goal) ;
+      
+      // publish goal cmd time
+      geometry_msgs::PoseStamped cmdTime ;
+      cmdTime.header.stamp = ros::Time::now() ;
+      cmdTime.header.frame_id = membership.robot_name ;
+      cmdTime.pose.position.x = goal.linear.x ;
+      cmdTime.pose.position.y = goal.linear.y ;
+      cmdTime.pose.position.z = goal.linear.z ;
+      
+      pubGoalTime.publish(cmdTime) ;
+      
       goalLog = false ; // current goal has been processed
     }
     pubDelay.publish(delayed) ; // published for rosbag logging
