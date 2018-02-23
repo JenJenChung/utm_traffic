@@ -5,7 +5,7 @@ utm_agents:
     v0: 0
     v1: 1
     num_walls: 1
-    wall0: [13, -7, 8.5, -11.5]
+    wall0: [13, -7, 10.5, -9.5]
   agent1:
     v0: 0
     v1: 2
@@ -25,7 +25,7 @@ utm_agents:
     v0: 1
     v1: 0
     num_walls: 1
-    wall0: [13, -7, 8.5, -11.5]
+    wall0: [13, -7, 10.5, -9.5]
   agent5:
     v0: 1
     v1: 2
