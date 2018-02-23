@@ -360,7 +360,7 @@ void Traffic::ComputeHighPath(int s, int g, bool dd){
   if (!gReached)
     ROS_ERROR_STREAM(membership.robot_name << ": [Traffic::ComputeHighpath()]: no path found!") ;
   else if(s == g){
-    ROS_INFO_STREAM(membership.robot_name << ": Start equals goal");
+//    ROS_INFO_STREAM(membership.robot_name << ": Start equals goal");
     return;
   } else {
     int v = g ;
